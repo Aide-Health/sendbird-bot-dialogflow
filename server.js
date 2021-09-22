@@ -183,17 +183,22 @@ app.post('/callback', express.json(), async (req, res) => {
         /**
          * Send user message from Sendbird to dialogflow
          */
-        sendToDialogFlow(msgText, async (response) => {
-            console.log('Response from DF: ' + response);
+        sendToDialogFlow(msgText, async (responseMessages) => {
+
+            for (const message of responseMessages) {
+                if (message.text) {
+                    await fromDialogFlowSendMessageToChannel(message.text.text, channelUrl, botId);
+                }
+            }
             /**
              * Lastly, send Dialogflow response to chat using our Bot
              */
-            await fromDialogFlowSendMessageToChannel(response, channelUrl, botId);
+            //await fromDialogFlowSendMessageToChannel(response, channelUrl, botId);
             /**
              * Respond HTTP OK (200)
              */
             res.status(200).json({
-                message: 'Response from DialogFlow: ' + response
+                message: 'Response from DialogFlow: ' + responseMessages
             });        
         });
     } else {
@@ -308,12 +313,13 @@ async function executeQueries(projectId, agentId, queries, languageCode, locatio
             console.log(intentResponse.queryResult);
             // new
             // todo :- for more than 1 message, how best to send...
-            for (const message of intentResponse.queryResult.responseMessages) {
-                if (message.text) {
-                  console.log(`Agent Response: ${message.text.text}`);
-                  callback(message.text.text);
-                }
-              }
+            callback(intentResponse.queryResult.responseMessages);
+            // for (const message of intentResponse.queryResult.responseMessages) {
+            //     if (message.text) {
+            //       console.log(`Agent Response: ${message.text.text}`);
+            //       callback(message.text.text);
+            //     }
+            // }
               if (intentResponse.queryResult.match.intent) {
                 console.log(
                   `Matched Intent: ${intentResponse.queryResult.match.intent.displayName}`
@@ -346,7 +352,6 @@ async function detectIntent(projectId, agentId, query, languageCode, location) {
         queryInput: {
         text: {
             text: query,
-            languageCode,
         },
         languageCode,
         },
