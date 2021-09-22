@@ -186,14 +186,15 @@ app.post('/callback', express.json(), async (req, res) => {
         sendToDialogFlow(msgText, async (responseMessages) => {
 
             for (const message of responseMessages) {
+                /**
+            //  * Lastly, send Dialogflow response to chat using our Bot
+            //  */
                 if (message.text) {
                     await fromDialogFlowSendMessageToChannel(message.text.text, channelUrl, botId);
                 }
             }
-            /**
-             * Lastly, send Dialogflow response to chat using our Bot
-             */
-            //await fromDialogFlowSendMessageToChannel(response, channelUrl, botId);
+            
+        
             /**
              * Respond HTTP OK (200)
              */
@@ -314,24 +315,12 @@ async function executeQueries(projectId, agentId, queries, languageCode, locatio
             // new
             // todo :- for more than 1 message, how best to send...
             callback(intentResponse.queryResult.responseMessages);
-            // for (const message of intentResponse.queryResult.responseMessages) {
-            //     if (message.text) {
-            //       console.log(`Agent Response: ${message.text.text}`);
-            //       callback(message.text.text);
-            //     }
-            // }
-              if (intentResponse.queryResult.match.intent) {
-                console.log(
-                  `Matched Intent: ${intentResponse.queryResult.match.intent.displayName}`
-                );
-              }
-             // --- 
 
-             // old
-            //const responseText = intentResponse.queryResult.fulfillmentText;
-            //context = intentResponse.queryResult.outputContexts;
-            //callback(responseText);
-            // --
+            if (intentResponse.queryResult.match.intent) {
+                console.log(
+                    `Matched Intent: ${intentResponse.queryResult.match.intent.displayName}`
+                );
+            }
         } catch (error) {
             console.log(error);
             callback('Error from DialogFlow: ' + error);
