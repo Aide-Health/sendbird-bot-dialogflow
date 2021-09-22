@@ -1,12 +1,13 @@
-
 /**
  * Enter your Sendbird information
  */
-var APP_ID = '';
+var APP_ID = '254A27F7-F855-47FF-B343-6D0A1772C4FF';
 var USER_ID = 'test1';
-var TOKEN = '';
-var ENTRYPOINT = '';
+var TOKEN = 'dfaf9e02efdb2b80269f81382e9f08cd7addfe34';
+var ENTRYPOINT = 'https://api-254A27F7-F855-47FF-B343-6D0A1772C4FF.sendbird.com/v3/bots';
 
+
+const {v4} = require('uuid');
 
 /**
  * DIALOGFLOW CONFIGURATION
@@ -17,9 +18,13 @@ var ENTRYPOINT = '';
  * INSTALL gcloud FROM HERE:
  * https://cloud.google.com/sdk/docs/install
 */
-var DIALOGFLOW_PROJECT_ID = '';
-var GOOGLE_SESSION_ID = '';
-var DIALOGFLOW_LANG = 'en-US';
+var DIALOGFLOW_PROJECT_ID = 'aide-dev-325407';
+var DIALOGFLOW_AGENT_ID = '9c1831d5-f0ae-46f0-ba52-00667aef9047';
+var GOOGLE_SESSION_ID = v4();
+var DIALOGFLOW_LANG = 'en-GB';
+var DIALOGFLOW_LOCATION = 'europe-west2';
+var DIALOGFLOW_API_ENDPOINT = 'europe-west2-dialogflow.googleapis.com';
+
 
 /**
  * Sendbird global object
@@ -32,7 +37,7 @@ var sb;
  */
 const express = require('express');
 const app = express();
-const bodyParser = require("body-parser");
+//const bodyParser = require("body-parser");
 
 /**
  * Use AXIOS for sending and receiving HTTP requests
@@ -47,14 +52,22 @@ const SendBird = require('sendbird');
 /**
  * Install DialogFlow API
  */
-const dialogflow = require('@google-cloud/dialogflow').v2beta1;
+// const dialogflow = require('@google-cloud/dialogflow').v2;
+//const dialogflow = require('@google-cloud/dialogflow-cx');
+const {SessionsClient} = require('@google-cloud/dialogflow-cx');
+
+
+//const client = new SessionsClient();
+const client = new SessionsClient({apiEndpoint: DIALOGFLOW_API_ENDPOINT})
+
 
 /**
  * Enable Middleware
  */
 app.use(express.json()); 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({extended: true}));
+//app.use(bodyParser.json());
+//app.use(bodyParser.urlencoded({extended: true}));
+app.use(express.urlencoded({extended: true}));
 
 
 /**
@@ -153,6 +166,7 @@ app.get('/bots/:channel_url/:bot_id', async (req, res) => {
  * send to DIALOGFLOW.
  */
 app.post('/callback', express.json(), async (req, res) => {
+    console.log('Message receieved via /callback')
     const { message, bot, channel } = req.body;
     if (message && bot && channel) {
         /**
@@ -165,6 +179,7 @@ app.post('/callback', express.json(), async (req, res) => {
          */
         const msgText = message.text;
         console.log('Sending to DialogFlow...');
+        console.log(msgText);
         /**
          * Send user message from Sendbird to dialogflow
          */
@@ -254,8 +269,9 @@ async function addBotToChannel(botId, channelUrl) {
 }
 
 async function fromDialogFlowSendMessageToChannel(queryText, channelUrl, botId) {
+   
     const params = {
-        message: queryText,
+        message: String(queryText),
         channel_url: channelUrl
     }
     await axios.post(ENTRYPOINT + '/' + botId + '/send', params, {
@@ -271,29 +287,45 @@ function sendToDialogFlow(message, callback) {
         const queries = [
             message
         ];
-        const response = executeQueries(DIALOGFLOW_PROJECT_ID, GOOGLE_SESSION_ID, queries, DIALOGFLOW_LANG, callback);    
+        const response = executeQueries(DIALOGFLOW_PROJECT_ID, DIALOGFLOW_AGENT_ID, queries, DIALOGFLOW_LANG, DIALOGFLOW_LOCATION, callback);    
         return response;
     } catch (error) {
         console.log(error)
     }
 }
 
-async function executeQueries(projectId, sessionId, queries, languageCode, callback) {
-    let context;
+async function executeQueries(projectId, agentId, queries, languageCode, location, callback) {
     let intentResponse;
     for (const query of queries) {
         try {
             intentResponse = await detectIntent(
                 projectId,
-                sessionId,
+                agentId,
                 query,
-                context,
-                languageCode
+                languageCode, 
+                location
             );
             console.log(intentResponse.queryResult);
-            const responseText = intentResponse.queryResult.fulfillmentText;
-            context = intentResponse.queryResult.outputContexts;
-            callback(responseText);
+            // new
+            // todo :- for more than 1 message, how best to send...
+            for (const message of intentResponse.queryResult.responseMessages) {
+                if (message.text) {
+                  console.log(`Agent Response: ${message.text.text}`);
+                  callback(message.text.text);
+                }
+              }
+              if (intentResponse.queryResult.match.intent) {
+                console.log(
+                  `Matched Intent: ${intentResponse.queryResult.match.intent.displayName}`
+                );
+              }
+             // --- 
+
+             // old
+            //const responseText = intentResponse.queryResult.fulfillmentText;
+            //context = intentResponse.queryResult.outputContexts;
+            //callback(responseText);
+            // --
         } catch (error) {
             console.log(error);
             callback('Error from DialogFlow: ' + error);
@@ -301,26 +333,24 @@ async function executeQueries(projectId, sessionId, queries, languageCode, callb
     }
 }
 
-async function detectIntent(projectId, sessionId, query, contexts, languageCode) {
-    const sessionClient = new dialogflow.SessionsClient();
-    const sessionPath = sessionClient.projectAgentSessionPath(
+async function detectIntent(projectId, agentId, query, languageCode, location) {
+    const sessionId = GOOGLE_SESSION_ID 
+    const sessionPath = client.projectLocationAgentSessionPath(
         projectId,
+        location,
+        agentId,
         sessionId
-    );
+      );
     const request = {
         session: sessionPath,
         queryInput: {
         text: {
             text: query,
-            languageCode: languageCode,
+            languageCode,
         },
+        languageCode,
         },
     };
-    if (contexts && contexts.length > 0) {
-        request.queryParams = {
-        contexts: contexts,
-        };
-    }
-    const responses = await sessionClient.detectIntent(request);
+    const responses = await client.detectIntent(request);
     return responses[0];
 }
