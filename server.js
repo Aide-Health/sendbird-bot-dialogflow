@@ -185,16 +185,17 @@ app.post('/callback', express.json(), async (req, res) => {
          */
         sendToDialogFlow(msgText, async (responseMessages) => {
 
-            for (const message of responseMessages) {
+            for (const responseMessage of responseMessages) {
                 /**
-            //  * Lastly, send Dialogflow response to chat using our Bot
-            //  */
-                if (message.text) {
-                    await fromDialogFlowSendMessageToChannel(message.text.text, channelUrl, botId);
+                //  * Lastly, send Dialogflow responses to chat using our Bot
+                //  */
+                if (responseMessage.message == "text" && responseMessage.text) {
+                    await fromDialogFlowSendMessageToChannel(responseMessage.text.text, channelUrl, botId);
+                } else if (responseMessage.message == "payload" && responseMessage.payload) {
+                    await fromDialogFlowSendPayloadToChannel(responseMessage.payload, channelUrl, botId);
                 }
-            }
             
-        
+            }
             /**
              * Respond HTTP OK (200)
              */
@@ -274,10 +275,26 @@ async function addBotToChannel(botId, channelUrl) {
     return data;
 }
 
-async function fromDialogFlowSendMessageToChannel(queryText, channelUrl, botId) {
+async function fromDialogFlowSendMessageToChannel(messageText, channelUrl, botId) {
    
     const params = {
-        message: String(queryText),
+        message: String(messageText),
+        channel_url: channelUrl
+    }
+
+    await axios.post(ENTRYPOINT + '/' + botId + '/send', params, {
+        headers: { 
+            "Api-Token": TOKEN,
+            'Content-Type': 'application/json'
+        },
+    });
+}
+
+async function fromDialogFlowSendPayloadToChannel(queryPayload, channelUrl, botId) {
+   
+    const params = {
+        message: '{This is a Payload}',
+        data: String(queryPayload),
         channel_url: channelUrl
     }
     await axios.post(ENTRYPOINT + '/' + botId + '/send', params, {
@@ -311,9 +328,9 @@ async function executeQueries(projectId, agentId, queries, languageCode, locatio
                 languageCode, 
                 location
             );
+            
             console.log(intentResponse.queryResult);
-            // new
-            // todo :- for more than 1 message, how best to send...
+
             callback(intentResponse.queryResult.responseMessages);
 
             if (intentResponse.queryResult.match.intent) {
